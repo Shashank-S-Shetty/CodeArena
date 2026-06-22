@@ -134,6 +134,6 @@ Python, JavaScript, TypeScript, Java, C++, C, C#, Go, Rust, PHP, Ruby, Swift, Ko
 
 ---
 
-## Author
+##👨‍💻 Author
 
 **Shashank S Shetty** — [GitHub](https://github.com/Shashank-S-Shetty)
