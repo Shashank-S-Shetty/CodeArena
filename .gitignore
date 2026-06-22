@@ -16,6 +16,9 @@ backend/build/
 **/.env
 **/.env.*
 
+# Editor
+.vscode/
+
 # Misc
 .DS_Store
 *.pem
