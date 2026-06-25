@@ -6,11 +6,17 @@ const cors = require("cors");
 require("dotenv").config();
 
 const app = express();
-app.use(cors());
 
 const server = http.createServer(app);
 
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
+
+// Allow Express to handle CORS for all routes too
+app.use(cors({
+  origin: FRONTEND_URL,
+  methods: ["GET", "POST"],
+  credentials: true,
+}));
 
 const io = new Server(server, {
   cors: {
@@ -23,6 +29,10 @@ const io = new Server(server, {
 
 app.get("/", (req, res) => {
   res.send("CodeArena Backend Running 🚀");
+});
+
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "ok" });
 });
 
 // Track users per room: roomId -> Map<socketId, { name, color }>
