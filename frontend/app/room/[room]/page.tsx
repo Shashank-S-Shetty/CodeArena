@@ -36,6 +36,9 @@ export default function RoomPage() {
   const [terminalOpen, setTerminalOpen] = useState(true);
 
   const editorRef = useRef<EditorRef | null>(null);
+  // Keep a ref so handleNameChange can always access the latest roomId without stale closure
+  const roomIdRef = useRef(roomId);
+  useEffect(() => { roomIdRef.current = roomId; }, [roomId]);
 
   useEffect(() => {
     const saved = localStorage.getItem("forgeid-username");
@@ -53,7 +56,8 @@ export default function RoomPage() {
     if (!roomId || !isValidRoomId) return;
 
     const joinRoom = () => {
-      socket.emit("join-room", { roomId, userName });
+      const name = localStorage.getItem("forgeid-username") || "Anonymous";
+      socket.emit("join-room", { roomId, userName: name });
     };
 
     if (!socket.connected) {
@@ -77,7 +81,7 @@ export default function RoomPage() {
       socket.off("receive-output", handleRemoteOutput);
       socket.disconnect();
     };
-  }, [roomId, userName]);
+  }, [roomId, isValidRoomId]);
 
   const handleRun = async () => {
     if (!editorRef.current || isRunning) return;
@@ -117,9 +121,9 @@ export default function RoomPage() {
   const handleNameChange = (newName: string) => {
     setUserName(newName);
     localStorage.setItem("forgeid-username", newName);
-    // Re-emit join-room so the server updates the participant list with the new name
+    // Emit directly — no reconnect needed, server will update the participant entry
     if (socket.connected) {
-      socket.emit("join-room", { roomId, userName: newName });
+      socket.emit("join-room", { roomId: roomIdRef.current, userName: newName });
     }
   };
 
