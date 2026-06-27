@@ -40,8 +40,8 @@ export default function DashboardPage() {
   };
 
   return (
-    <main className="h-screen bg-[#0F172A] text-white flex items-center justify-center">
-      <div className="w-full max-w-md px-8 py-12 rounded-3xl border border-[#1E293B] bg-[#0B1120]/80 backdrop-blur-xl shadow-[0_0_60px_rgba(34,211,238,0.06)] flex flex-col gap-7">
+    <main className="min-h-screen bg-[#0F172A] text-white flex items-center justify-center p-4">
+      <div className="w-full max-w-md px-6 py-10 md:px-8 md:py-12 rounded-3xl border border-[#1E293B] bg-[#0B1120]/80 backdrop-blur-xl shadow-[0_0_60px_rgba(34,211,238,0.06)] flex flex-col gap-6 md:gap-7">
         {/* Logo */}
         <div className="text-center">
           <h1 className="text-5xl font-black bg-gradient-to-r from-cyan-400 to-purple-500 bg-clip-text text-transparent tracking-wider">

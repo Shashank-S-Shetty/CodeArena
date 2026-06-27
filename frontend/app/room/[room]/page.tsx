@@ -9,8 +9,8 @@ import Navbar from "@/components/navbar/Navbar";
 import EditorPanel from "@/components/editor/EditorPanel";
 import CollaborationPanel from "@/components/collaboration/CollaborationPanel";
 import TerminalPanel, { TerminalLine } from "@/components/terminal/TerminalPanel";
+import { Users, Code2, ChevronUp, ChevronDown } from "lucide-react";
 
-// EditorPanel will expose this via ref
 export interface EditorRef {
   getActiveFile: () => { fileName: string; code: string };
 }
@@ -26,13 +26,14 @@ export default function RoomPage() {
       ? params.room[0]
       : "";
 
-  // Validate room ID format (must be CA-XXXX with 4 alphanumeric chars)
   const isValidRoomId = /^CA-[A-Z0-9]{4}$/i.test(roomId);
 
   const [userName, setUserName] = useState("Anonymous");
   const [outputLines, setOutputLines] = useState<TerminalLine[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const [stdin, setStdin] = useState("");
+  const [mobileTab, setMobileTab] = useState<"editor" | "users">("editor");
+  const [terminalOpen, setTerminalOpen] = useState(true);
 
   const editorRef = useRef<EditorRef | null>(null);
 
@@ -41,7 +42,6 @@ export default function RoomPage() {
     if (saved) setUserName(saved);
   }, []);
 
-  // Redirect to dashboard if invalid room ID
   useEffect(() => {
     if (roomId && !isValidRoomId) {
       alert(`Invalid room ID: ${roomId}\n\nRoom IDs must be in the format CA-XXXX (e.g., CA-A3F9)`);
@@ -53,9 +53,7 @@ export default function RoomPage() {
     if (!roomId || !isValidRoomId) return;
 
     const joinRoom = () => {
-      console.log("Socket connected:", socket.id);
       socket.emit("join-room", { roomId, userName });
-      console.log(`Joined room: ${roomId} as ${userName}`);
     };
 
     if (!socket.connected) {
@@ -68,9 +66,9 @@ export default function RoomPage() {
       socket.on("connect", joinRoom);
     }
 
-    // Receive output broadcast from another user who clicked Run
     const handleRemoteOutput = ({ lines }: { lines: TerminalLine[] }) => {
       setOutputLines(lines);
+      setTerminalOpen(true);
     };
     socket.on("receive-output", handleRemoteOutput);
 
@@ -87,46 +85,30 @@ export default function RoomPage() {
     const { fileName, code } = editorRef.current.getActiveFile();
 
     if (!code.trim()) {
-      setOutputLines([
-        { type: "error", text: "Error: No code to execute. Write some code first." },
-      ]);
+      setOutputLines([{ type: "error", text: "Error: No code to execute." }]);
+      setTerminalOpen(true);
       return;
     }
 
     setIsRunning(true);
-    setOutputLines([
-      { type: "info", text: `▶ Running ${fileName}...` },
-    ]);
+    setTerminalOpen(true);
+    setOutputLines([{ type: "info", text: `▶ Running ${fileName}...` }]);
 
     try {
       const result = await executeCode(fileName, code, stdin);
 
-      const lines: TerminalLine[] = [
-        { type: "info", text: `▶ Executed ${fileName}` },
-      ];
-
-      if (result.output) {
-        lines.push({ type: "output", text: result.output.trim() });
-      }
-
-      if (result.error) {
-        lines.push({ type: "error", text: result.error.trim() });
-      }
-
-      if (result.exitCode === 0) {
-        lines.push({ type: "success", text: `✓ Process exited with code 0` });
-      } else {
-        lines.push({ type: "error", text: `✗ Process exited with code ${result.exitCode}` });
-      }
+      const lines: TerminalLine[] = [{ type: "info", text: `▶ Executed ${fileName}` }];
+      if (result.output) lines.push({ type: "output", text: result.output.trim() });
+      if (result.error) lines.push({ type: "error", text: result.error.trim() });
+      lines.push({
+        type: result.exitCode === 0 ? "success" : "error",
+        text: result.exitCode === 0 ? "✓ Process exited with code 0" : `✗ Process exited with code ${result.exitCode}`,
+      });
 
       setOutputLines(lines);
-
-      // Broadcast output to all other users in the room
       socket.emit("run-output", { roomId, lines });
     } catch (err: unknown) {
-      setOutputLines([
-        { type: "error", text: `Execution failed: ${err instanceof Error ? err.message : String(err)}` },
-      ]);
+      setOutputLines([{ type: "error", text: `Execution failed: ${err instanceof Error ? err.message : String(err)}` }]);
     } finally {
       setIsRunning(false);
     }
@@ -140,45 +122,31 @@ export default function RoomPage() {
     const trimmed = command.trim();
     if (!trimmed) return;
 
-    // Parse common run commands: python3 main.py, node app.js, etc.
     const runPatterns = [
-      { regex: /^python3?\s+(\S+)/, ext: ".py" },
-      { regex: /^node\s+(\S+)/, ext: ".js" },
-      { regex: /^ts-node\s+(\S+)/, ext: ".ts" },
-      { regex: /^java\s+(\S+)/, ext: ".java" },
+      { regex: /^python3?\s+(\S+)/ },
+      { regex: /^node\s+(\S+)/ },
+      { regex: /^ts-node\s+(\S+)/ },
+      { regex: /^java\s+(\S+)/ },
     ];
 
     let fileName: string | null = null;
-
     for (const { regex } of runPatterns) {
       const match = trimmed.match(regex);
-      if (match) {
-        fileName = match[1];
-        break;
-      }
+      if (match) { fileName = match[1]; break; }
     }
 
-    // Also handle bare filename like "main.py"
-    if (!fileName && /\.\w+$/.test(trimmed)) {
-      fileName = trimmed;
-    }
+    if (!fileName && /\.\w+$/.test(trimmed)) fileName = trimmed;
 
     if (fileName && editorRef.current) {
-      // Find matching file from editor
       const { fileName: activeFile, code } = editorRef.current.getActiveFile();
       const targetFile = fileName === activeFile ? activeFile : fileName;
-
       addLines([{ type: "info", text: `▶ Running ${targetFile}...` }]);
-
       try {
         const result = await executeCode(targetFile, code, terminalStdin);
         const lines: TerminalLine[] = [];
         if (result.output) lines.push({ type: "output", text: result.output.trim() });
         if (result.error) lines.push({ type: "error", text: result.error.trim() });
-        lines.push({
-          type: result.exitCode === 0 ? "success" : "error",
-          text: `Process exited with code ${result.exitCode}`,
-        });
+        lines.push({ type: result.exitCode === 0 ? "success" : "error", text: `Process exited with code ${result.exitCode}` });
         addLines(lines);
       } catch (err) {
         addLines([{ type: "error", text: `Failed: ${err instanceof Error ? err.message : String(err)}` }]);
@@ -186,27 +154,21 @@ export default function RoomPage() {
       return;
     }
 
-    // Handle other basic commands
-    if (trimmed === "clear") {
-      addLines([{ type: "info", text: "__clear__" }]);
-      return;
-    }
-
+    if (trimmed === "clear") { addLines([{ type: "info", text: "__clear__" }]); return; }
     if (trimmed === "help") {
       addLines([
         { type: "info", text: "Available commands:" },
         { type: "command", text: "  python3 <file>  — Run a Python file" },
         { type: "command", text: "  node <file>     — Run a JavaScript file" },
-        { type: "command", text: "  <filename>      — Run the file directly (e.g. main.py)" },
+        { type: "command", text: "  <filename>      — Run the file directly" },
         { type: "command", text: "  clear           — Clear the terminal" },
-        { type: "command", text: "  help            — Show this help" },
       ]);
       return;
     }
 
     addLines([
       { type: "error", text: `Unknown command: ${trimmed}` },
-      { type: "info", text: `Type "help" to see available commands.` },
+      { type: "info", text: `Type "help" for available commands.` },
     ]);
   };
 
@@ -217,19 +179,81 @@ export default function RoomPage() {
       isDark ? "bg-[#0F172A] text-white" : "bg-gray-100 text-gray-900"
     }`}>
       <Navbar roomId={roomId} userName={userName} onRun={handleRun} isRunning={isRunning} />
-      <div className={`flex min-h-0 flex-1 gap-6 p-6 overflow-hidden transition-colors duration-300 ${
+
+      {/* Mobile tab switcher */}
+      <div className={`md:hidden flex flex-shrink-0 border-b transition-colors duration-300 ${
+        isDark ? "bg-[#0B1120] border-[#1E293B]" : "bg-white border-gray-200"
+      }`}>
+        <button
+          onClick={() => setMobileTab("editor")}
+          className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-semibold transition-all duration-300 ${
+            mobileTab === "editor"
+              ? "text-cyan-500 border-b-2 border-cyan-500"
+              : isDark ? "text-gray-400" : "text-gray-500"
+          }`}
+        >
+          <Code2 size={15} />
+          Editor
+        </button>
+        <button
+          onClick={() => setMobileTab("users")}
+          className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-semibold transition-all duration-300 ${
+            mobileTab === "users"
+              ? "text-cyan-500 border-b-2 border-cyan-500"
+              : isDark ? "text-gray-400" : "text-gray-500"
+          }`}
+        >
+          <Users size={15} />
+          Participants
+        </button>
+      </div>
+
+      {/* Main content */}
+      <div className={`flex min-h-0 flex-1 gap-4 md:gap-6 p-3 md:p-6 overflow-hidden transition-colors duration-300 ${
         isDark
           ? "bg-gradient-to-br from-[#0F172A] to-[#020617]"
           : "bg-gradient-to-br from-gray-100 to-gray-200"
       }`}>
-        <EditorPanel roomId={roomId} ref={editorRef} />
-        <CollaborationPanel />
+        {/* Editor — hidden on mobile when users tab is active */}
+        <div className={`flex-1 min-w-0 min-h-0 overflow-hidden ${
+          mobileTab === "users" ? "hidden md:flex" : "flex"
+        }`}>
+          <EditorPanel roomId={roomId} ref={editorRef} />
+        </div>
+
+        {/* Collaboration panel — full width on mobile when users tab active, sidebar on desktop */}
+        <div className={`min-h-0 overflow-hidden ${
+          mobileTab === "users"
+            ? "flex flex-1 md:flex-none md:w-80"
+            : "hidden md:flex md:w-80"
+        }`}>
+          <CollaborationPanel />
+        </div>
       </div>
-      <TerminalPanel
-        outputLines={outputLines}
-        onCommand={handleTerminalCommand}
-        onStdinChange={setStdin}
-      />
+
+      {/* Terminal — collapsible on mobile */}
+      <div className="flex-shrink-0">
+        {/* Terminal toggle bar (mobile only) */}
+        <button
+          onClick={() => setTerminalOpen((o) => !o)}
+          className={`md:hidden w-full flex items-center justify-between px-4 py-2 text-sm font-semibold border-t transition-colors duration-300 ${
+            isDark
+              ? "bg-[#0B1120] border-[#1E293B] text-gray-300"
+              : "bg-white border-gray-200 text-gray-600"
+          }`}
+        >
+          <span>Terminal</span>
+          {terminalOpen ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
+        </button>
+
+        <div className={`${terminalOpen ? "block" : "hidden md:block"}`}>
+          <TerminalPanel
+            outputLines={outputLines}
+            onCommand={handleTerminalCommand}
+            onStdinChange={setStdin}
+          />
+        </div>
+      </div>
     </main>
   );
 }

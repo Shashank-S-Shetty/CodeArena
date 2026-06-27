@@ -48,7 +48,7 @@ export default function CollaborationPanel() {
   }, []);
 
   return (
-    <div className={`flex w-80 flex-shrink-0 flex-col rounded-3xl border p-5 shadow-[0_0_40px_rgba(139,92,246,0.08)] backdrop-blur-xl transition-colors duration-300 ${
+    <div className={`flex w-full md:w-80 flex-shrink-0 flex-col rounded-3xl border p-5 shadow-[0_0_40px_rgba(139,92,246,0.08)] backdrop-blur-xl transition-colors duration-300 ${
       isDark
         ? "border-purple-500/10 bg-[#0B1120]/80"
         : "border-gray-200 bg-white"
