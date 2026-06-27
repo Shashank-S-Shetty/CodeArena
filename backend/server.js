@@ -28,7 +28,7 @@ const io = new Server(server, {
 });
 
 app.get("/", (req, res) => {
-  res.send("CodeArena Backend Running 🚀");
+  res.send("ForgeIDE Backend Running 🚀");
 });
 
 app.get("/health", (req, res) => {

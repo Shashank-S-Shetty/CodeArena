@@ -29,7 +29,7 @@ export default function TerminalPanel({
   const [stdin, setStdin] = useState("");
   const [isExecuting, setIsExecuting] = useState(false);
   const [terminalHistory, setTerminalHistory] = useState<TerminalLine[]>([
-    { type: "success", text: "✓ CodeArena terminal ready" },
+    { type: "success", text: "✓ ForgeIDE terminal ready" },
     { type: "info",    text: 'Use the "Stdin" tab to provide input for your program.' },
     { type: "info",    text: 'Type "help" for available commands.' },
   ]);

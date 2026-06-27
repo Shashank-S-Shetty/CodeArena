@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { Moon, Sun, Plus, Play, X, Copy, Mail, Menu, Users, ChevronLeft } from "lucide-react";
 import { socket } from "@/lib/socket";
@@ -41,9 +42,9 @@ export default function Navbar({ roomId, userName, onRun, isRunning }: NavbarPro
   };
 
   const handleEmailInvite = () => {
-    const subject = encodeURIComponent("Join my CodeArena session");
+    const subject = encodeURIComponent("Join my ForgeIDE session");
     const body = encodeURIComponent(
-      `Hey! Join me on CodeArena for real-time collaborative coding.\n\nRoom ID: ${roomId}\nDirect link: ${roomUrl}`
+      `Hey! Join me on ForgeIDE for real-time collaborative coding.\n\nRoom ID: ${roomId}\nDirect link: ${roomUrl}`
     );
     window.open(`mailto:?subject=${subject}&body=${body}`, "_blank");
   };
@@ -62,15 +63,21 @@ export default function Navbar({ roomId, userName, onRun, isRunning }: NavbarPro
         <div className="flex items-center gap-3 md:gap-8">
           <button
             onClick={() => window.location.href = "/dashboard"}
-            className="text-2xl md:text-4xl font-black tracking-wider bg-gradient-to-r from-cyan-400 to-purple-500 bg-clip-text text-transparent hover:opacity-80 transition-opacity"
+            className="hover:opacity-80 transition-opacity flex-shrink-0"
             title="Go to lobby"
           >
-            CA
+            <Image
+              src={isDark ? "/logo-dark.svg" : "/logo-light.svg"}
+              alt="ForgeIDE"
+              width={56}
+              height={28}
+              className="object-contain"
+            />
           </button>
 
           <div className="hidden sm:block">
             <h1 className={`text-lg md:text-2xl font-bold ${isDark ? "text-white" : "text-gray-900"}`}>
-              Editor Workspace
+              ForgeIDE Workspace
             </h1>
             <p className={`text-xs md:text-sm ${isDark ? "text-gray-400" : "text-gray-500"}`}>
               Room: <span className="text-cyan-500 font-mono">{roomId}</span>

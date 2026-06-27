@@ -1,8 +1,8 @@
-# CodeArena
+# ForgeIDE
 
 A real-time collaborative code editor where multiple users can write, run, and share code together in a shared room — live, no refresh needed.
 
-![CodeArena](https://img.shields.io/badge/Next.js-16-black?style=flat-square&logo=next.js) ![Socket.IO](https://img.shields.io/badge/Socket.IO-4.8-black?style=flat-square&logo=socket.io) ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?style=flat-square&logo=typescript) ![Tailwind CSS](https://img.shields.io/badge/TailwindCSS-4-06B6D4?style=flat-square&logo=tailwindcss)
+![ForgeIDE](https://img.shields.io/badge/Next.js-16-black?style=flat-square&logo=next.js) ![Socket.IO](https://img.shields.io/badge/Socket.IO-4.8-black?style=flat-square&logo=socket.io) ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?style=flat-square&logo=typescript) ![Tailwind CSS](https://img.shields.io/badge/TailwindCSS-4-06B6D4?style=flat-square&logo=tailwindcss)
 
 ---
 
@@ -46,7 +46,7 @@ A real-time collaborative code editor where multiple users can write, run, and s
 ## Project Structure
 
 ```
-CodeArena/
+ForgeIDE/
 ├── backend/
 │   ├── server.js          # Express + Socket.IO server
 │   └── package.json

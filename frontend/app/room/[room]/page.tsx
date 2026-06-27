@@ -26,7 +26,7 @@ export default function RoomPage() {
       ? params.room[0]
       : "";
 
-  const isValidRoomId = /^CA-[A-Z0-9]{4}$/i.test(roomId);
+  const isValidRoomId = /^FI-[A-Z0-9]{4}$/i.test(roomId);
 
   const [userName, setUserName] = useState("Anonymous");
   const [outputLines, setOutputLines] = useState<TerminalLine[]>([]);
@@ -38,13 +38,13 @@ export default function RoomPage() {
   const editorRef = useRef<EditorRef | null>(null);
 
   useEffect(() => {
-    const saved = localStorage.getItem("codearena-username");
+    const saved = localStorage.getItem("forgeid-username");
     if (saved) setUserName(saved);
   }, []);
 
   useEffect(() => {
     if (roomId && !isValidRoomId) {
-      alert(`Invalid room ID: ${roomId}\n\nRoom IDs must be in the format CA-XXXX (e.g., CA-A3F9)`);
+      alert(`Invalid room ID: ${roomId}\n\nRoom IDs must be in the format FI-XXXX (e.g., FI-A3F9)`);
       router.push("/dashboard");
     }
   }, [roomId, isValidRoomId, router]);

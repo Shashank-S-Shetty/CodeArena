@@ -20,7 +20,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CodeArena",
+  title: "ForgeIDE",
   description: "Real-time collaborative code editor",
 };
 

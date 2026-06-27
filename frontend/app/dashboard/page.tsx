@@ -1,10 +1,11 @@
 "use client";
 
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 function generateRoomId() {
-  return "CA-" + Math.random().toString(36).substring(2, 6).toUpperCase();
+  return "FI-" + Math.random().toString(36).substring(2, 6).toUpperCase();
 }
 
 export default function DashboardPage() {
@@ -23,7 +24,7 @@ export default function DashboardPage() {
 
   const handleCreate = () => {
     if (!validate()) return;
-    localStorage.setItem("codearena-username", userName.trim());
+    localStorage.setItem("forgeid-username", userName.trim());
     const newRoomId = generateRoomId();
     router.push(`/room/${newRoomId}`);
   };
@@ -35,7 +36,7 @@ export default function DashboardPage() {
       setError("Please enter a room ID.");
       return;
     }
-    localStorage.setItem("codearena-username", userName.trim());
+    localStorage.setItem("forgeid-username", userName.trim());
     router.push(`/room/${joinRoomId.trim()}`);
   };
 
@@ -43,16 +44,26 @@ export default function DashboardPage() {
     <main className="min-h-screen bg-[#0F172A] text-white flex items-center justify-center p-4">
       <div className="w-full max-w-md px-6 py-10 md:px-8 md:py-12 rounded-3xl border border-[#1E293B] bg-[#0B1120]/80 backdrop-blur-xl shadow-[0_0_60px_rgba(34,211,238,0.06)] flex flex-col gap-6 md:gap-7">
         {/* Logo */}
-        <div className="text-center">
-          <h1 className="text-5xl font-black bg-gradient-to-r from-cyan-400 to-purple-500 bg-clip-text text-transparent tracking-wider">
-            CodeArena
-          </h1>
-          <p className="mt-2 text-gray-400 text-sm">
-            Real-time collaborative code editor
-          </p>
+        <div className="flex flex-col items-center gap-3">
+          <Image
+            src="/logo-dark.svg"
+            alt="ForgeIDE"
+            width={120}
+            height={60}
+            className="object-contain"
+            priority
+          />
+          <div className="text-center">
+            <h1 className="text-4xl font-black bg-gradient-to-r from-cyan-400 to-purple-500 bg-clip-text text-transparent tracking-wider">
+              ForgeIDE
+            </h1>
+            <p className="mt-1 text-gray-400 text-sm">
+              Real-time collaborative code editor
+            </p>
+          </div>
         </div>
 
-        {/* Name input — required for both actions */}
+        {/* Name input */}
         <div className="flex flex-col gap-2">
           <label className="text-xs font-bold tracking-widest text-gray-400 uppercase">
             Your Name
@@ -103,7 +114,7 @@ export default function DashboardPage() {
               setJoinRoomId(e.target.value);
               setError("");
             }}
-            placeholder="Enter Room ID (e.g. CA-A3F9)"
+            placeholder="Enter Room ID (e.g. FI-A3F9)"
             className="w-full px-5 py-4 rounded-2xl bg-[#111827] border border-[#1E293B] text-white placeholder-gray-600 outline-none focus:border-cyan-500/50 focus:shadow-[0_0_20px_rgba(34,211,238,0.1)] transition-all duration-300 font-mono"
           />
           <button

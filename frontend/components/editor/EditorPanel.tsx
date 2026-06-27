@@ -29,7 +29,7 @@ const EditorPanel = forwardRef<EditorRef, EditorPanelProps>(({ roomId }, ref) =>
 
   const [files, setFiles] = useState<Record<string, string>>({
     "main.py": `import asyncio\n\ndef calculate_sum():\n    return 42\n\nasync def process_data():\n    data = []\n\n    for item in range(10):\n        print(item)\n`,
-    "app.js": `function greet() {\n  console.log("Welcome to CodeArena");\n}\n\ngreet();\n`,
+    "app.js": `function greet() {\n  console.log("Welcome to ForgeIDE");\n}\n\ngreet();\n`,
     "config.json": `{\n  "theme": "dark",\n  "language": "python"\n}`,
   });
 
@@ -65,9 +65,9 @@ const EditorPanel = forwardRef<EditorRef, EditorPanelProps>(({ roomId }, ref) =>
   useEffect(() => {
     if (!roomId) return; // Wait until roomId is available
 
-    const savedTabs = localStorage.getItem(`codearena-tabs-${roomId}`);
-    const savedFiles = localStorage.getItem(`codearena-files-${roomId}`);
-    const savedActiveTab = localStorage.getItem(`codearena-active-tab-${roomId}`);
+    const savedTabs = localStorage.getItem(`forgeid-tabs-${roomId}`);
+    const savedFiles = localStorage.getItem(`forgeid-files-${roomId}`);
+    const savedActiveTab = localStorage.getItem(`forgeid-active-tab-${roomId}`);
 
     if (savedTabs) setTabs(JSON.parse(savedTabs));
     if (savedFiles) setFiles(JSON.parse(savedFiles));
@@ -77,9 +77,9 @@ const EditorPanel = forwardRef<EditorRef, EditorPanelProps>(({ roomId }, ref) =>
 
   // Persist state to localStorage whenever it changes (scoped to roomId)
   useEffect(() => {
-    localStorage.setItem(`codearena-tabs-${roomId}`, JSON.stringify(tabs));
-    localStorage.setItem(`codearena-files-${roomId}`, JSON.stringify(files));
-    localStorage.setItem(`codearena-active-tab-${roomId}`, activeTab);
+    localStorage.setItem(`forgeid-tabs-${roomId}`, JSON.stringify(tabs));
+    localStorage.setItem(`forgeid-files-${roomId}`, JSON.stringify(files));
+    localStorage.setItem(`forgeid-active-tab-${roomId}`, activeTab);
   }, [tabs, files, activeTab, roomId]);
 
   // Receive realtime code — fileName comes from the payload so no stale closure risk
