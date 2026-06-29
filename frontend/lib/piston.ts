@@ -42,6 +42,10 @@ function getLanguageId(fileName: string): number | null {
   return null;
 }
 
+// All execution goes through our backend proxy — API key stays server-side
+const BACKEND_URL =
+  process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5001";
+
 export async function executeCode(
   fileName: string,
   code: string,
@@ -58,18 +62,27 @@ export async function executeCode(
   }
 
   try {
-    const response = await fetch("https://ce.judge0.com/submissions?wait=true&base64_encoded=false", {
+    const response = await fetch(`${BACKEND_URL}/execute`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         source_code: code,
         language_id: languageId,
-        stdin: stdin,
+        stdin,
       }),
     });
 
+    if (response.status === 429) {
+      return {
+        output: "",
+        error: "Rate limit reached. Please wait a moment before running again.",
+        exitCode: 1,
+      };
+    }
+
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.error || `HTTP ${response.status}`);
     }
 
     const result = await response.json();
