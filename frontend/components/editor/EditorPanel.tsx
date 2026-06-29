@@ -1,19 +1,9 @@
 "use client";
 
-import {
-  forwardRef,
-  useCallback,
-  useEffect,
-  useImperativeHandle,
-  useRef,
-  useState,
-} from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import * as Y from "yjs";
-import { MonacoBinding } from "y-monaco";
 import { socket } from "@/lib/socket";
 import { useTheme } from "@/lib/ThemeContext";
-import type * as Monaco from "monaco-editor";
 
 const Editor = dynamic(() => import("@monaco-editor/react"), { ssr: false });
 
@@ -36,228 +26,96 @@ const EditorPanel = forwardRef<EditorRef, EditorPanelProps>(({ roomId }, ref) =>
 
   const [tabs, setTabs] = useState<string[]>(Object.keys(DEFAULT_FILES));
   const [activeTab, setActiveTab] = useState("main.py");
+  const [files, setFiles] = useState<Record<string, string>>(DEFAULT_FILES);
 
-  // Yjs docs: one per file. Keyed by fileName.
-  const ydocsRef = useRef<Map<string, Y.Doc>>(new Map());
-  // Current Monaco binding
-  const bindingRef = useRef<MonacoBinding | null>(null);
-  // Monaco editor instance
-  const editorRef2 = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
-  // Monaco module ref
-  const monacoRef = useRef<typeof Monaco | null>(null);
+  // Prevent echo-back of remote changes
+  const isRemoteChange = useRef(false);
 
+  // Keep refs in sync for imperative handle (avoids stale closure)
+  const filesRef = useRef(files);
   const activeTabRef = useRef(activeTab);
+  useEffect(() => { filesRef.current = files; }, [files]);
   useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
 
-  // ── Expose getActiveFile to parent via ref ──────────────────────────────────
+  // Expose getActiveFile to parent
   useImperativeHandle(ref, () => ({
-    getActiveFile: () => {
-      const fileName = activeTabRef.current;
-      const ydoc = ydocsRef.current.get(fileName);
-      const code = ydoc ? ydoc.getText("content").toString() : "";
-      return { fileName, code };
-    },
+    getActiveFile: () => ({
+      fileName: activeTabRef.current,
+      code: filesRef.current[activeTabRef.current] ?? "",
+    }),
   }));
 
-  // ── Get or create a Y.Doc for a file ───────────────────────────────────────
-  const getOrCreateDoc = useCallback((fileName: string): Y.Doc => {
-    if (ydocsRef.current.has(fileName)) {
-      return ydocsRef.current.get(fileName)!;
-    }
-    const ydoc = new Y.Doc();
-    const ytext = ydoc.getText("content");
-
-    // Seed with default or persisted content
-    const savedFiles = localStorage.getItem(`forgeid-files-${roomId}`);
-    let initialContent = DEFAULT_FILES[fileName] ?? "";
-    if (savedFiles) {
-      try {
-        const parsed = JSON.parse(savedFiles);
-        if (parsed[fileName] !== undefined) initialContent = parsed[fileName];
-      } catch { /* ignore */ }
-    }
-
-    if (ytext.toString() === "" && initialContent) {
-      ydoc.transact(() => ytext.insert(0, initialContent));
-    }
-
-    // Observe changes — emit Yjs updates over socket
-    ydoc.on("update", (update: Uint8Array, origin: unknown) => {
-      if (origin === "remote") return; // Don't echo back remote updates
-      socket.emit("yjs-update", {
-        roomId,
-        fileName,
-        update: Array.from(update),
-      });
-      // Also persist to localStorage
-      persistFile(fileName, ytext.toString());
-    });
-
-    ydocsRef.current.set(fileName, ydoc);
-    return ydoc;
-  }, [roomId]);
-
-  // ── Persist file content to localStorage ───────────────────────────────────
-  const persistFile = useCallback((fileName: string, content: string) => {
-    try {
-      const savedFiles = localStorage.getItem(`forgeid-files-${roomId}`);
-      const files = savedFiles ? JSON.parse(savedFiles) : {};
-      files[fileName] = content;
-      localStorage.setItem(`forgeid-files-${roomId}`, JSON.stringify(files));
-    } catch { /* ignore */ }
-  }, [roomId]);
-
-  // ── Bind the active file's Y.Doc to Monaco ─────────────────────────────────
-  const bindDocToEditor = useCallback((fileName: string) => {
-    if (!editorRef2.current || !monacoRef.current) return;
-
-    // Destroy previous binding
-    if (bindingRef.current) {
-      bindingRef.current.destroy();
-      bindingRef.current = null;
-    }
-
-    const ydoc = getOrCreateDoc(fileName);
-    const ytext = ydoc.getText("content");
-
-    // Set language on the model
-    const model = editorRef2.current.getModel();
-    if (model) {
-      monacoRef.current.editor.setModelLanguage(model, getLanguage(fileName));
-    }
-
-    bindingRef.current = new MonacoBinding(
-      ytext,
-      editorRef2.current.getModel()!,
-      new Set([editorRef2.current]),
-      null
-    );
-
-    // Request sync from server in case we're joining mid-session
-    socket.emit("yjs-sync-request", { roomId, fileName });
-  }, [getOrCreateDoc, roomId]);
-
-  // ── Handle tab switch ───────────────────────────────────────────────────────
-  const switchTab = useCallback((fileName: string) => {
-    setActiveTab(fileName);
-    bindDocToEditor(fileName);
-    localStorage.setItem(`forgeid-active-tab-${roomId}`, fileName);
-  }, [bindDocToEditor, roomId]);
-
-  // ── Monaco onMount ──────────────────────────────────────────────────────────
-  const handleEditorMount = useCallback((
-    editor: Monaco.editor.IStandaloneCodeEditor,
-    monaco: typeof Monaco
-  ) => {
-    editorRef2.current = editor;
-    monacoRef.current = monaco;
-    bindDocToEditor(activeTabRef.current);
-  }, [bindDocToEditor]);
-
-  // ── Socket listeners for Yjs ────────────────────────────────────────────────
+  // Load persisted state from localStorage on mount
   useEffect(() => {
-    const handleYjsUpdate = ({ fileName, update }: { fileName: string; update: number[] }) => {
-      const ydoc = getOrCreateDoc(fileName);
-      Y.applyUpdate(ydoc, new Uint8Array(update), "remote");
-    };
+    if (!roomId) return;
+    const savedTabs = localStorage.getItem(`forgeid-tabs-${roomId}`);
+    const savedFiles = localStorage.getItem(`forgeid-files-${roomId}`);
+    const savedActiveTab = localStorage.getItem(`forgeid-active-tab-${roomId}`);
+    if (savedTabs) { try { setTabs(JSON.parse(savedTabs)); } catch { /* ignore */ } }
+    if (savedFiles) { try { setFiles(JSON.parse(savedFiles)); } catch { /* ignore */ } }
+    if (savedActiveTab) setActiveTab(savedActiveTab);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomId]);
 
-    const handleYjsSyncResponse = ({ fileName, state }: { fileName: string; state: number[] }) => {
-      const ydoc = getOrCreateDoc(fileName);
-      Y.applyUpdate(ydoc, new Uint8Array(state), "remote");
+  // Persist state to localStorage on every change
+  useEffect(() => {
+    if (!roomId) return;
+    localStorage.setItem(`forgeid-tabs-${roomId}`, JSON.stringify(tabs));
+    localStorage.setItem(`forgeid-files-${roomId}`, JSON.stringify(files));
+    localStorage.setItem(`forgeid-active-tab-${roomId}`, activeTab);
+  }, [tabs, files, activeTab, roomId]);
+
+  // Socket listeners — receive remote changes
+  useEffect(() => {
+    const handleReceiveCode = ({ fileName, code }: { fileName: string; code: string }) => {
+      isRemoteChange.current = true;
+      setFiles((prev) => ({ ...prev, [fileName]: code }));
     };
 
     const handleRemoteFileCreated = ({ fileName, code }: { fileName: string; code: string }) => {
       setTabs((prev) => prev.includes(fileName) ? prev : [...prev, fileName]);
-      const ydoc = getOrCreateDoc(fileName);
-      const ytext = ydoc.getText("content");
-      if (ytext.toString() === "" && code) {
-        ydoc.transact(() => ytext.insert(0, code), "remote");
-      }
-      persistFile(fileName, code);
+      setFiles((prev) => ({ ...prev, [fileName]: code }));
     };
 
     const handleRemoteFileDeleted = ({ fileName }: { fileName: string }) => {
-      ydocsRef.current.get(fileName)?.destroy();
-      ydocsRef.current.delete(fileName);
       setTabs((prev) => {
         const updated = prev.filter((t) => t !== fileName);
-        setActiveTab((current) => {
-          if (current === fileName) {
-            const next = updated[0] ?? "";
-            if (next) setTimeout(() => bindDocToEditor(next), 0);
-            return next;
-          }
-          return current;
-        });
+        setActiveTab((cur) => cur === fileName ? updated[0] ?? "" : cur);
+        return updated;
+      });
+      setFiles((prev) => {
+        const updated = { ...prev };
+        delete updated[fileName];
         return updated;
       });
     };
 
-    socket.on("yjs-update", handleYjsUpdate);
-    socket.on("yjs-sync-response", handleYjsSyncResponse);
+    socket.on("receive-code", handleReceiveCode);
     socket.on("remote-file-created", handleRemoteFileCreated);
     socket.on("remote-file-deleted", handleRemoteFileDeleted);
 
     return () => {
-      socket.off("yjs-update", handleYjsUpdate);
-      socket.off("yjs-sync-response", handleYjsSyncResponse);
+      socket.off("receive-code", handleReceiveCode);
       socket.off("remote-file-created", handleRemoteFileCreated);
       socket.off("remote-file-deleted", handleRemoteFileDeleted);
     };
-  }, [getOrCreateDoc, bindDocToEditor, persistFile]);
+  }, []);
 
-  // ── Load saved tabs from localStorage on mount ─────────────────────────────
-  useEffect(() => {
-    if (!roomId) return;
-    const savedTabs = localStorage.getItem(`forgeid-tabs-${roomId}`);
-    const savedActiveTab = localStorage.getItem(`forgeid-active-tab-${roomId}`);
-    if (savedTabs) {
-      try { setTabs(JSON.parse(savedTabs)); } catch { /* ignore */ }
-    }
-    if (savedActiveTab) setActiveTab(savedActiveTab);
-  }, [roomId]);
-
-  // Persist tabs list
-  useEffect(() => {
-    if (roomId) {
-      localStorage.setItem(`forgeid-tabs-${roomId}`, JSON.stringify(tabs));
-    }
-  }, [tabs, roomId]);
-
-  // Re-bind when activeTab changes (handles initial load)
-  useEffect(() => {
-    if (editorRef2.current) bindDocToEditor(activeTab);
-  }, [activeTab, bindDocToEditor]);
-
-  // ── File operations ─────────────────────────────────────────────────────────
-  const createNewFile = () => {
-    const fileName = prompt("Enter file name");
-    if (!fileName || tabs.includes(fileName)) {
-      if (fileName) alert("File already exists");
+  const handleEditorChange = (value: string | undefined) => {
+    const code = value ?? "";
+    if (isRemoteChange.current) {
+      isRemoteChange.current = false;
       return;
     }
-    setTabs((prev) => [...prev, fileName]);
-    getOrCreateDoc(fileName); // init empty doc
-    setActiveTab(fileName);
-    socket.emit("file-created", { roomId, fileName, code: "" });
-  };
-
-  const deleteFile = (fileName: string) => {
-    if (tabs.length === 1) { alert("At least one file must exist"); return; }
-    const updatedTabs = tabs.filter((t) => t !== fileName);
-    ydocsRef.current.get(fileName)?.destroy();
-    ydocsRef.current.delete(fileName);
-    setTabs(updatedTabs);
-    if (activeTab === fileName) switchTab(updatedTabs[0]);
-    socket.emit("file-deleted", { roomId, fileName });
+    setFiles((prev) => ({ ...prev, [activeTab]: code }));
+    socket.emit("code-change", { roomId, fileName: activeTab, code });
   };
 
   const getLanguage = (fileName: string) => {
     if (fileName.endsWith(".py")) return "python";
     if (fileName.endsWith(".js")) return "javascript";
     if (fileName.endsWith(".json")) return "json";
-    if (fileName.endsWith(".ts")) return "typescript";
-    if (fileName.endsWith(".tsx")) return "typescript";
+    if (fileName.endsWith(".ts") || fileName.endsWith(".tsx")) return "typescript";
     if (fileName.endsWith(".cpp") || fileName.endsWith(".cc")) return "cpp";
     if (fileName.endsWith(".java")) return "java";
     if (fileName.endsWith(".go")) return "go";
@@ -267,23 +125,37 @@ const EditorPanel = forwardRef<EditorRef, EditorPanelProps>(({ roomId }, ref) =>
     return "plaintext";
   };
 
+  const createNewFile = () => {
+    const fileName = prompt("Enter file name");
+    if (!fileName) return;
+    if (tabs.includes(fileName)) { alert("File already exists"); return; }
+    setTabs((prev) => [...prev, fileName]);
+    setFiles((prev) => ({ ...prev, [fileName]: "" }));
+    setActiveTab(fileName);
+    socket.emit("file-created", { roomId, fileName, code: "" });
+  };
+
+  const deleteFile = (fileName: string) => {
+    if (tabs.length === 1) { alert("At least one file must exist"); return; }
+    const updatedTabs = tabs.filter((t) => t !== fileName);
+    setTabs(updatedTabs);
+    setFiles((prev) => { const u = { ...prev }; delete u[fileName]; return u; });
+    if (activeTab === fileName) setActiveTab(updatedTabs[0]);
+    socket.emit("file-deleted", { roomId, fileName });
+  };
+
   const downloadActiveFile = () => {
-    const ydoc = ydocsRef.current.get(activeTab);
-    const content = ydoc ? ydoc.getText("content").toString() : "";
+    const content = files[activeTab] ?? "";
     const blob = new Blob([content], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url;
-    a.download = activeTab;
-    a.click();
+    a.href = url; a.download = activeTab; a.click();
     URL.revokeObjectURL(url);
   };
 
   return (
     <div className={`flex flex-col flex-1 min-w-0 overflow-hidden border rounded-3xl shadow-[0_0_40px_rgba(34,211,238,0.08)] transition-colors duration-300 ${
-      isDark
-        ? "bg-[#0B1120]/80 backdrop-blur-xl border-cyan-500/10"
-        : "bg-white border-gray-200"
+      isDark ? "bg-[#0B1120]/80 backdrop-blur-xl border-cyan-500/10" : "bg-white border-gray-200"
     }`}>
       {/* Header / Tabs */}
       <div className={`flex items-center justify-between flex-shrink-0 h-16 px-4 border-b transition-colors duration-300 ${
@@ -291,33 +163,24 @@ const EditorPanel = forwardRef<EditorRef, EditorPanelProps>(({ roomId }, ref) =>
       }`}>
         <div className="flex items-center gap-3 overflow-x-auto">
           {tabs.map((tab) => (
-            <div
-              key={tab}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all duration-300 ${
-                activeTab === tab
-                  ? "bg-gradient-to-r from-cyan-500/20 to-purple-500/20 text-cyan-500 border border-cyan-500/20"
-                  : isDark
-                  ? "text-gray-400 hover:bg-[#1E293B] hover:text-white"
-                  : "text-gray-500 hover:bg-gray-200 hover:text-gray-900"
-              }`}
-            >
-              <button onClick={() => switchTab(tab)} className="whitespace-nowrap">{tab}</button>
+            <div key={tab} className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all duration-300 ${
+              activeTab === tab
+                ? "bg-gradient-to-r from-cyan-500/20 to-purple-500/20 text-cyan-500 border border-cyan-500/20"
+                : isDark ? "text-gray-400 hover:bg-[#1E293B] hover:text-white" : "text-gray-500 hover:bg-gray-200 hover:text-gray-900"
+            }`}>
+              <button onClick={() => setActiveTab(tab)} className="whitespace-nowrap">{tab}</button>
               <button onClick={() => deleteFile(tab)} className="text-xs hover:text-red-400 transition-all duration-300">✕</button>
             </div>
           ))}
         </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={downloadActiveFile}
-            className={`px-4 py-2 text-sm rounded-xl transition-all duration-300 ${
-              isDark
-                ? "text-gray-300 bg-[#1E293B] hover:text-white hover:bg-[#273449]"
-                : "text-gray-600 bg-gray-200 hover:text-gray-900 hover:bg-gray-300"
-            }`}
-          >
-            Save
-          </button>
-        </div>
+        <button
+          onClick={downloadActiveFile}
+          className={`px-4 py-2 text-sm rounded-xl transition-all duration-300 ${
+            isDark ? "text-gray-300 bg-[#1E293B] hover:text-white hover:bg-[#273449]" : "text-gray-600 bg-gray-200 hover:text-gray-900 hover:bg-gray-300"
+          }`}
+        >
+          Save
+        </button>
       </div>
 
       {/* Body */}
@@ -329,38 +192,31 @@ const EditorPanel = forwardRef<EditorRef, EditorPanelProps>(({ roomId }, ref) =>
           <h3 className={`mb-4 text-xs font-bold tracking-widest uppercase ${isDark ? "text-gray-400" : "text-gray-500"}`}>
             Explorer
           </h3>
-          <button
-            onClick={createNewFile}
-            className="w-full mb-4 px-3 py-2 rounded-xl bg-cyan-500 text-black font-semibold hover:bg-cyan-400 transition-all duration-300"
-          >
+          <button onClick={createNewFile} className="w-full mb-4 px-3 py-2 rounded-xl bg-cyan-500 text-black font-semibold hover:bg-cyan-400 transition-all duration-300">
             + New File
           </button>
           <div className="space-y-1">
             {tabs.map((tab) => (
-              <div
-                key={tab}
-                className={`flex items-center justify-between px-3 py-2 rounded-xl cursor-pointer transition-all duration-300 ${
-                  activeTab === tab
-                    ? isDark ? "bg-[#1E293B] text-cyan-400" : "bg-cyan-50 text-cyan-600"
-                    : isDark
-                    ? "text-gray-400 hover:bg-[#111827] hover:text-white hover:translate-x-1"
-                    : "text-gray-500 hover:bg-gray-200 hover:text-gray-900 hover:translate-x-1"
-                }`}
-              >
-                <button onClick={() => switchTab(tab)} className="flex-1 text-left">{tab}</button>
+              <div key={tab} className={`flex items-center justify-between px-3 py-2 rounded-xl cursor-pointer transition-all duration-300 ${
+                activeTab === tab
+                  ? isDark ? "bg-[#1E293B] text-cyan-400" : "bg-cyan-50 text-cyan-600"
+                  : isDark ? "text-gray-400 hover:bg-[#111827] hover:text-white hover:translate-x-1" : "text-gray-500 hover:bg-gray-200 hover:text-gray-900 hover:translate-x-1"
+              }`}>
+                <button onClick={() => setActiveTab(tab)} className="flex-1 text-left">{tab}</button>
                 <button onClick={() => deleteFile(tab)} className="text-xs hover:text-red-400">✕</button>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Monaco */}
+        {/* Monaco Editor */}
         <div className="relative flex-1 overflow-hidden">
           <Editor
             height="100%"
             language={getLanguage(activeTab)}
+            value={files[activeTab]}
+            onChange={handleEditorChange}
             theme={isDark ? "vs-dark" : "light"}
-            onMount={handleEditorMount}
             options={{
               fontSize: 14,
               fontFamily: "JetBrains Mono, Courier New, monospace",
